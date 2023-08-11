@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <title>3D-Test</title>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="shortcut icon" href="./assets/favicon.png" type="image/x-icon">
+  <style>
+    body {
+      margin: 0px;
+      background: linear-gradient(48deg, rgba(0, 0, 0, 1) 0%, rgba(56, 56, 56, 1) 95%);
+    }
+  </style>
+</head>
+
+<body>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js" crossorigin="anonymous"
+    referrerpolicy="no-referrer"></script>
+  <script type="module">
+
+    import * as THREE from './assets/JS/three.module.js';
+    import { OrbitControls } from './assets/JS/OrbitControls.js';
+    import { GLTFLoader } from './assets/JS/GLTFLoader.js';
+    import { RGBELoader } from './assets/JS/RGBELoader.js';
+    
+    let camera, scene, renderer;
+    let url = './assets/model/cabbana_last_withUV.glb';
+    
+    const params = {
+      width: 238,
+      depth: 118,
+      passageheight: 152,
+      angle: 30,
+    };
+    
+    // Parameters start
+    let height_first_status = 1;
+    let width_first_status = 1;
+    let blade_first_status = 1;
+    let start_flag = 1;
+    let initialscale_middleseperator2, initialscale_middleseperator1, initialscale_blade;
+    let cloned_children = [];
+    let blade_delta, blade_margine, foot_height, corner_size;
+    // Paramenters end
+
+    function make_one_box (model) {
+      const children_names = [];
+      const useful_children = ["beam1", "beam2", "beam6", "beam7", "column1", "column3", "column4", "column8", "foot1", "foot3", "foot4", "foot8", "corner1", "corner3", "corner4", "corner8", "coltop020", "coltop021", "coltop026", "coltop028", "blade1", "blade2", "blade1left", "blade2left", "blade1right", "blade2right"];
+      // const model = scene;
+      console.log(corner_size);
+      model.traverse((child) => {
+        if (child.isMesh){
+          children_names.push(child.name);
+        }
+      });
+      for (let name of children_names){
+        if (!useful_children.includes(name)){
+          const remove_child = model.getObjectByName(name);
+          remove_child.parent.remove(remove_child);
+        }
+      }
+      const beam1 = model.getObjectByName("beam1");
+      const beam6 = model.getObjectByName("beam6");
+      const beam2 = model.getObjectByName("beam2");
+      const beam7 = model.getObjectByName("beam7");
+      const beam1_bbox = new THREE.Box3().setFromObject(beam1);
+      const beam1_size = beam1_bbox.getSize(new THREE.Vector3());
+      const beam6_bbox = new THREE.Box3().setFromObject(beam6);
+      const beam6_size = beam6_bbox.getSize(new THREE.Vector3());
+      const delta = (beam1_size.x - beam6_size.x) / beam1.parent.scale.z;
+      beam6.scale.set(beam6.scale.x * beam1_size.y / beam6_size.y,
+                      beam6.scale.y * beam1_size.z / beam6_size.z,
+                      beam6.scale.z * beam1_size.x / beam6_size.x,);
+      console.log(delta);
+      beam6.position.set(beam6.position.x - delta/2, beam6.position.y, beam6.position.z);
+      for (let child_name of cloned_children) {
+        const remove_child = model.getObjectByName(child_name);
+        remove_child.parent.remove(remove_child);
+      }
+      cloned_children = [];
+      const x_distance_beam2_7 = Math.abs(beam2.position.x - beam7.position.x);
+      clone_blade_set("blade1", x_distance_beam2_7);
+      scene.add(model);
+      render();
+
+    }
+
+    
+    function changeWidth() {
+      console.log('change Width');
+      const drection_x_children = ["beam1", "beam4", "beam6", "middleseperator2"];
+      const middle_children = ["beam5", "middleseperator1", "column2", "column7", "column6", "foot2", "foot7", "foot6", "corner6", "coltop019", "coltop022", "coltop024", "coltop027", "blade5", "blade6", "blade5left", "blade6left", "blade5right", "blade6right"];
+      const opposite_children = ["beam7", "column1", "column8", "foot1", "foot8", "corner1", "corner8", "coltop026", "coltop028", "blade3", "blade4", "blade3left", "blade4left", "blade3right", "blade4right"];
+      const model = scene;
+      const beam1 = model.getObjectByName("beam1");
+      const bbox = new THREE.Box3().setFromObject(beam1);
+      const size = bbox.getSize(new THREE.Vector3());
+      const parent_scale = beam1.parent.scale;
+      const x_length = size.x / parent_scale.z;
+      const new_x_length = params.width * 25.4;
+      const x_lengthRatio =  beam1.scale.z * new_x_length / x_length;
+      const delta_x = new_x_length - x_length;
+      model.traverse((child) => {
+        if (drection_x_children.includes(child.name)) {
+          if (child.name.includes("middle")) {
+            if (width_first_status ==1) {
+              initialscale_middleseperator2 = child.scale.z;
+              child.scale.set(child.scale.x, child.scale.y, x_lengthRatio * initialscale_middleseperator2);
+              width_first_status = 0;
+            } else {
+              child.scale.set(child.scale.x, child.scale.y, x_lengthRatio * initialscale_middleseperator2);
+            }
+          }else {
+            child.scale.set(child.scale.x, child.scale.y, x_lengthRatio); 
+          }
+        }
+      });
+      
+      beam1.position.set(beam1.position.x + delta_x/2, beam1.position.y, beam1.position.z);
+      model.traverse((child) => {
+        if (child.isMesh && !child.name.includes("beam1")) {
+          if (opposite_children.includes(child.name)) {
+            child.position.set(child.position.x + delta_x, child.position.y, child.position.z);
+          } else if (middle_children.includes(child.name)) {
+            child.position.set(child.position.x + delta_x / 2, child.position.y, child.position.z);
+          } else if (child.name.includes("beam4") || child.name.includes("middleseperator2")){
+            child.position.set(beam1.position.x - new_x_length / 4, child.position.y, child.position.z);
+          } else if (child.name.includes("beam6")){
+            child.position.set(beam1.position.x + new_x_length / 4, child.position.y, child.position.z);
+          }
+        }
+      });
+      cloneBaldes();
+      scene = model ;
+      render();
+
+    }
+
+    function changeBladeAngle() {
+      console.log('change Blade Angle');
+      const model = scene;
+      model.traverse((child) => {
+        if (child.name.includes("blade")) {
+          child.rotation.z = THREE.Math.degToRad(params.angle)
+        }
+      });
+      scene = model ;
+      render();
+    }
+
+    function changeDepth() {
+      console.log('change Depth');
+      const model = scene;
+      let z_lengthRatio, z_length, new_z_length;
+      model.traverse((child) => {
+        if (child.name.includes("column")) {
+          const bbox = new THREE.Box3().setFromObject(child);
+          const size = bbox.getSize(new THREE.Vector3());
+          const parent_scale = child.parent.scale;
+          z_length = size.y * 1 /  parent_scale.z;
+          new_z_length = params.depth * 10;
+          z_lengthRatio =  child.scale.z * new_z_length / z_length;
+          child.position.set(child.position.x, child.position.y, child.position.z + (new_z_length-z_length)/2);
+          child.scale.set(child.scale.x, child.scale.y, z_lengthRatio); 
+        }
+      });
+      model.traverse((child) => {
+        if (!child.name.includes("column") && !child.name.includes("foot") && child.isMesh) {
+          const delta_z = new_z_length - z_length;
+          child.position.set(child.position.x, child.position.y, child.position.z + delta_z);
+        }
+      });
+      scene = model ;
+      render();
+    }
+
+    
+    function changePassageHeight() {
+      console.log('change PassageHeight');
+      const drection_z_children = ["beam2", "beam3", "beam5", "beam7", "middleseperator1"]
+      const blade_children = ["blade1", "blade2", "blade3", "blade4", "blade5", "blade6"];
+      const direction_blade_children1 = ["blade1", "blade2", "blade3", "blade4"];
+      const direction_blade_children2 = ["blade5", "blade6"];
+      const middle_children = ["beam6", "middleseperator2", "column4", "column7", "column8", "foot4", "foot7", "foot8", "corner4", "corner8", "coltop020", "coltop024", "coltop025", "coltop028", "blade1right", "blade2right", "blade3right", "blade4right", "blade5left", "blade6left"];
+      const opposite_children = ["beam4", "column5", "column6", "foot5", "foot6", "corner5", "corner6", "coltop022", "blade5right", "blade6right"];
+      const model = scene;
+      const beam2 = model.getObjectByName("beam2");
+      const bbox = new THREE.Box3().setFromObject(beam2);
+      const size = bbox.getSize(new THREE.Vector3());
+      const parent_scale = beam2.parent.scale;
+      const y_length = size.z / parent_scale.z;
+      const new_y_length = params.passageheight * 25.4;
+      const y_lengthRatio =  beam2.scale.z * (new_y_length / 2) / y_length;
+      const delta_y = new_y_length / 2 - y_length;
+      model.traverse((child) => {
+        if (drection_z_children.includes(child.name)) {
+          if (child.name.includes("middle")) {
+            if (height_first_status ==1) {
+              initialscale_middleseperator1 = child.scale.z;
+              child.scale.set(child.scale.x, child.scale.y, y_lengthRatio * initialscale_middleseperator1);
+              height_first_status = 0;
+            } else {
+              child.scale.set(child.scale.x, child.scale.y, y_lengthRatio * initialscale_middleseperator1);
+            }
+          }else {
+            child.scale.set(child.scale.x, child.scale.y, y_lengthRatio); 
+          }
+        }else if (blade_children.includes(child.name)) {
+          if (blade_first_status == 1) {
+            initialscale_blade = child.scale.z;
+            child.scale.set(child.scale.x, child.scale.y, y_lengthRatio * initialscale_blade);
+            blade_first_status = 0;
+          } else {
+            child.scale.set(child.scale.x, child.scale.y, y_lengthRatio * initialscale_blade);
+
+          }
+        }
+      });
+      
+      beam2.position.set(beam2.position.x, beam2.position.y - delta_y/2, beam2.position.z);
+      model.traverse((child) => {
+        if (child.isMesh && !child.name.includes("beam2")) {
+          if (opposite_children.includes(child.name)) {
+            child.position.set(child.position.x, child.position.y - delta_y * 2, child.position.z);
+          } else if (middle_children.includes(child.name)) {
+            child.position.set(child.position.x, child.position.y - delta_y, child.position.z);
+          } else if (child.name.includes("beam7") || child.name.includes("middleseperator1") || direction_blade_children1.includes(child.name)){
+            child.position.set(child.position.x, beam2.position.y, child.position.z);
+          } else if (child.name.includes("beam3") || child.name.includes("beam5") || direction_blade_children2.includes(child.name)){
+            child.position.set(child.position.x , child.position.y - delta_y * 3 / 2, child.position.z);
+          }
+        }
+      });
+      cloneBaldes();
+      scene = model ;
+      render();
+    }
+
+    function cloneBaldes(model = null) {
+      
+      if (model === null || model === undefined) {
+        model = scene;
+      }
+      for (let child_name of cloned_children) {
+        const remove_child = model.getObjectByName(child_name);
+        remove_child.parent.remove(remove_child);
+      }
+      cloned_children = [];
+      const child_beam2 = model.getObjectByName('beam2');
+      const child_beam7 = model.getObjectByName('beam7');
+      const x_distance_beam2_7 = Math.abs(child_beam2.position.x - child_beam7.position.x);
+      clone_blade_set("blade1", x_distance_beam2_7 / 2);
+      clone_blade_set("blade3", x_distance_beam2_7 / 2, -1);
+      clone_blade_set("blade5", x_distance_beam2_7 / 2, -1);
+      if (start_flag == 1){
+        scene.add(model) ;
+        start_flag = 0;
+      } else {
+        scene = model;
+      }
+      render();
+
+    }
+
+    function clone_blade_set(mesh_base_name, distance, dir = 1) {
+      clone_blade_one_box(mesh_base_name, distance, dir);
+      clone_blade_one_box(mesh_base_name + "left", distance, dir);
+      clone_blade_one_box(mesh_base_name + "right", distance, dir);
+    }
+
+    function clone_blade_one_box(mesh_name, distance, direct) {
+      const model = scene;
+      const child = model.getObjectByName(mesh_name);
+      let cloned_no = 2;
+      while (cloned_no * Math.abs(blade_delta.x) + blade_margine < distance) {
+        let cloned_child = child.clone();
+        cloned_child.name = mesh_name + "_clone" + cloned_no;
+        cloned_child.position.set(child.position.x + direct * cloned_no * blade_delta.x,
+                        child.position.y + direct * cloned_no * blade_delta.y,
+                        child.position.z + direct * cloned_no * blade_delta.z);
+        child.parent.add(cloned_child);
+        cloned_children.push(cloned_child.name);
+        cloned_no++;
+      }
+    }
+
+    init();
+    
+    render();
+
+    function init() {
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.25, 20);
+      camera.position.z = 3.5;
+      camera.position.x = 1.5;
+      camera.position.y = 2.5;
+
+      scene = new THREE.Scene();
+
+      // =================Lights=================
+
+      scene.add( new THREE.AmbientLight( 0xffffff ) );
+      const light = new THREE.DirectionalLight( 0xffffff, 1.5 );
+      light.position.set( 0, 0, 1 );
+      scene.add( light );
+
+      // ===========Light GUI Controls===========
+      const gui = new dat.GUI( { width: 285 } );
+      const folderDimentions = gui.addFolder('Dimensions')
+      folderDimentions.add( params, 'width', 96, 469 ).step( 8 ).onChange( function () {
+        changeWidth();
+      } );
+      folderDimentions.add( params, 'depth', 94, 268 ).step( 2 ).onChange( function () {
+        changeDepth();
+      } );
+      folderDimentions.add( params, 'passageheight', 98, 218 ).step( 4 ).onChange( function () {
+        changePassageHeight();
+      } );
+      folderDimentions.open();
+
+      const folderBladerotation = gui.addFolder('Blade Rotation')
+      folderBladerotation.add( params, 'angle', 0, 90 ).step( 5 ).onChange( function () {
+        changeBladeAngle();
+      } );
+      folderBladerotation.open();
+      
+      // ==============GLTFLoader============
+      const loader = new GLTFLoader();
+      loader.load(url, function (gltf) {
+        const model = gltf.scene;
+        const beam2 = model.getObjectByName('beam2');
+        const blade1 = model.getObjectByName('blade1');
+        const blade2 = model.getObjectByName('blade2');
+        const foot1 = model.getObjectByName('foot1');
+        const corner = model.getObjectByName('corner1');
+        blade_delta = {
+          x : blade2.position.x - blade1.position.x,
+          y : blade2.position.y - blade1.position.y,
+          z : blade2.position.z - blade1.position.z
+        };
+        let bbox = new THREE.Box3().setFromObject(foot1);
+        const size = bbox.getSize(new THREE.Vector3());
+        foot_height = size.y;
+        blade_margine = Math.abs(beam2.position.x - blade1.position.x);
+        bbox = new THREE.Box3().setFromObject(foot1);
+        corner_size = bbox.getSize(new THREE.Vector3());
+        scene.add(model); // Add the model to your Three.js scene
+        render();
+        cloneBaldes(model);
+      });
+
+
+      // ==============Renderer==============
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.toneMappingExposure = 1;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      document.body.append(renderer.domElement);
+
+      // ===========Orbit Controls===========
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.addEventListener('change', render);
+      controls.minDistance = 2.0;
+      controls.maxDistance = 10;
+      controls.target.set(0, 0, - 0.2);
+      controls.update();
+      window.addEventListener('resize', onWindowResize);
+
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      render();
+    }
+
+    function render() {
+      renderer.render(scene, camera);
+    }
+
+  </script>
+
+</body>
+</html>
